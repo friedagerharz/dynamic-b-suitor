@@ -23,8 +23,38 @@ std::optional<std::string> path_b;
 template <typename T> std::vector<T> edges;
 Graph G;
 
+std::vector<dur> dyn_rt;
+std::vector<dur> stat_rt;
+double dyn_mean = 0.0;
+double stat_mean = 0.0;
+double dyn_var;
+double stat_var;
+
 [[maybe_unused]] count n = 100;
 [[maybe_unused]] double p = 0.5;
+
+void calculateMean() {
+  for (int i = 0; i < dyn_rt.size(); i++) {
+    dyn_mean += dyn_rt.at(i).count();
+    stat_mean += stat_rt.at(i).count();
+  }
+}
+
+void calculateVariance() {
+  double dyn_sum_diff_sq = 0.0;
+  double stat_sum_diff_sq = 0.0;
+
+  for (int i = 0; i < dyn_rt.size(); i++) {
+    double dyn_diff = dyn_rt.at(i).count() - dyn_mean;
+    double stat_diff = stat_rt.at(i).count() - stat_mean;
+
+    dyn_sum_diff_sq += dyn_diff * dyn_diff;
+    stat_sum_diff_sq += stat_diff * stat_diff;
+  }
+
+  dyn_var = dyn_sum_diff_sq / dyn_rt.size();
+  stat_var = stat_sum_diff_sq / stat_rt.size();
+}
 
 std::string pluralS(int num) {
   return (num == 1) ? "" : "s";
@@ -139,10 +169,8 @@ template <typename EdgeType> void runComparison(Graph &G, EdgeType b) {
 
   assert(dwm == wm);
 
-  std::cout << "(Dynamic) Adding " << batch_size << " edge"
-            << pluralS(batch_size) << " took\n"
-            << dyn_t.count() << " s.\n";
-  std::cout << "(Static) Running b-Suitor took\n" << stat_t.count() << " s.\n";
+  dyn_rt.emplace_back(dyn_t);
+  stat_rt.emplace_back(stat_t);
 }
 
 int main(int argc, char *argv[]) {
@@ -163,7 +191,18 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  num_b.has_value() ? runComparison(G, num_b) : runComparison(G, path_b);
+  for (int i = 0; i < 10; i++) {
+    Aux::Random::setSeed(i, true);
+    num_b.has_value() ? runComparison(G, num_b) : runComparison(G, path_b);
+  }
+
+  calculateMean();
+  calculateVariance();
+
+  std::cout << "(Dynamic) Adding " << batch_size << " edges took " << dyn_mean
+            << " s on average.\n";
+  std::cout << "(Static)  Running suitor took  " << stat_mean
+            << " s on average.\n";
 
   return 0;
 }
