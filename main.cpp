@@ -25,6 +25,8 @@ std::optional<std::vector<count>> vec_b;
 template <typename T> std::vector<T> edges;
 Graph G;
 
+std::vector<count> dyn_num_affected;
+
 std::vector<dur> dyn_rt;
 std::vector<dur> stat_rt;
 // double dyn_mean = 0.0;
@@ -64,8 +66,8 @@ count n;
 std::string pluralS(int num) {
   return (num == 1) ? "" : "s";
 }
-std::string fromOrInto(const char *s) {
-  return (std::strcmp(s, "insert") == 0) ? "into" : "from";
+std::string fromOrInto(std::string &s) {
+  return (s == "insert") ? "into" : "from";
 }
 
 std::string getFileFormat(const std::string &file) {
@@ -186,6 +188,7 @@ template <typename BType> void runComparison(Graph &G, BType &b) {
   dur dyn_t = (std::strcmp(operation.c_str(), "insert") == 0)
                   ? edgeInsertion<WeightedEdge>(G, dbsm)
                   : edgeRemoval<Edge>(G, dbsm);
+  dyn_num_affected.emplace_back(dbsm.getNumberOfAffected());
 
   const auto dm = dbsm.getBMatching();
   const auto dwm = dm.weight(G);
@@ -212,13 +215,6 @@ int main(int argc, char *argv[]) {
     printUse();
     return 1;
   }
-  std::cout << "Start runtime comparison for the dynamic " << argv[4]
-            << "-matching: " << argv[2] << " " << argv[3] << " edge"
-            << pluralS(std::atoi(argv[3])) << " " << fromOrInto(argv[2])
-            << " graph " << std::filesystem::path(argv[1]).filename()
-            << std::endl;
-  std::cout << std::endl;
-
   Aux::Random::setSeed(0, true);
 
   if (!parseInput(std::vector<std::string>(argv, argv + argc))) {
@@ -242,6 +238,11 @@ int main(int argc, char *argv[]) {
   // calculateMean();
   // calculateVariance();
 
+  std::cout << "(Dynamic) affected nodes per run:\n";
+  for (auto v : dyn_num_affected) {
+    std::cout << v << std::endl;
+  }
+  std::cout << std::endl;
   // std::cout << "(Dynamic) Adding " << batch_size << " edges took " <<
   // dyn_mean << "s on average.\n";
   std::cout << "(Dynamic) runtimes [s] per run:\n";
