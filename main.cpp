@@ -25,6 +25,8 @@ std::optional<std::vector<count>> vec_b;
 template <typename T> std::vector<T> edges;
 Graph G;
 
+std::vector<edgeweight> dyn_ws;
+edgeweight stat_w;
 std::vector<count> dyn_num_affected;
 
 std::vector<dur> dyn_rt;
@@ -162,6 +164,8 @@ dur edgeInsertion(Graph &G, DynamicBSuitorMatcher &dbsm) {
 
 template <typename EdgeType>
 dur edgeRemoval(Graph &G, DynamicBSuitorMatcher &dbsm) {
+  for (auto e : edges<Edge>)
+    G.removeEdge(e.u, e.v);
   const auto t1 = high_resolution_clock::now();
   dbsm.removeEdges(edges<Edge>);
   dbsm.buildBMatching();
@@ -169,30 +173,49 @@ dur edgeRemoval(Graph &G, DynamicBSuitorMatcher &dbsm) {
   return t2 - t1;
 }
 
-template <typename BType> void runComparison(Graph &G, BType &b) {
-  // Select m edges of the graph, remove them but put them into edges for
-  // later insertion. This will make sure that the graph is valid.
-  for (auto j = 0; j < batch_size; j++) {
-    const auto [u, v] = GraphTools::randomEdge(G);
-    assert(G.hasEdge(u, v));
-    (std::strcmp(operation.c_str(), "insert") == 0)
-        ? edges<WeightedEdge>.emplace_back(u, v, G.weight(u, v))
-        : edges<Edge>.emplace_back(u, v);
-    G.removeEdge(u, v);
+template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
+  if (operation == "insert") {
+    // Select batch_size edges of the graph, remove them but put them into edges
+    // for later insertion. This will make sure that the graph is valid and th
+    // after insertion.
+    for (auto j = 0; j < batch_size; j++) {
+      const auto [u, v] = GraphTools::randomEdge(G);
+      assert(G.hasEdge(u, v));
+      edges<WeightedEdge>.emplace_back(u, v, G.weight(u, v));
+      G.removeEdge(u, v);
+    }
+  } else {
+    // Select batch_size edges to be added to the graph. Put them into edges for
+    // later removal. This will make sure that the graph is valid and th after
+    // removal.
+
+    for (auto j = 0; j < batch_size; j++) {
+      node u, v;
+      do {
+        u = GraphTools::randomNode(G);
+        v = GraphTools::randomNode(G);
+      } while (u == v || G.hasEdge(u, v));
+      edgeweight w = 1.0;
+      edges<Edge>.emplace_back(u, v);
+      G.addEdge(u, v, w);
+    }
   }
 
   DynamicBSuitorMatcher dbsm(G, b);
 
   dbsm.run();
 
-  dur dyn_t = (std::strcmp(operation.c_str(), "insert") == 0)
-                  ? edgeInsertion<WeightedEdge>(G, dbsm)
-                  : edgeRemoval<Edge>(G, dbsm);
+  dur dyn_t = (operation == "insert") ? edgeInsertion<WeightedEdge>(G, dbsm)
+                                      : edgeRemoval<Edge>(G, dbsm);
   dyn_num_affected.emplace_back(dbsm.getNumberOfAffected());
 
   const auto dm = dbsm.getBMatching();
-  const auto dwm = dm.weight(G);
 
+  dyn_ws.emplace_back(dm.weight(G));
+  dyn_rt.emplace_back(dyn_t);
+}
+
+template <typename BType> void runStaticBSuitor(Graph &G, BType &b) {
   BSuitorMatcher bsm(G, b);
 
   const auto t3 = high_resolution_clock::now();
@@ -202,42 +225,12 @@ template <typename BType> void runComparison(Graph &G, BType &b) {
   dur stat_t = t4 - t3;
 
   const auto sm = bsm.getBMatching();
-  const auto wm = sm.weight(G);
+  stat_w = sm.weight(G);
 
-  assert(std::abs(dwm - wm) < FLOAT_EPSILON);
-
-  dyn_rt.emplace_back(dyn_t);
   stat_rt.emplace_back(stat_t);
 }
 
-int main(int argc, char *argv[]) {
-  if (argc != 5) {
-    printUse();
-    return 1;
-  }
-  Aux::Random::setSeed(0, true);
-
-  if (!parseInput(std::vector<std::string>(argv, argv + argc))) {
-    return 1;
-  }
-
-  std::cout << "Start comparison for the dynamic " << argv[4]
-            << "-matching: " << operation << " " << batch_size << " edge"
-            << pluralS(batch_size) << " " << fromOrInto(operation) << " graph "
-            << std::filesystem::path(argv[1]).filename() << " with "
-            << G.numberOfNodes() << " nodes and " << G.numberOfEdges()
-            << " edges." << std::endl;
-  std::cout << std::endl;
-
-  for (int i = 0; i < num_runs; i++) {
-    Aux::Random::setSeed(i, true);
-    num_b.has_value() ? runComparison(G, num_b.value())
-                      : runComparison(G, vec_b.value());
-  }
-
-  // calculateMean();
-  // calculateVariance();
-
+void printResults() {
   std::cout << "(Dynamic) affected nodes per run:\n";
   for (auto v : dyn_num_affected) {
     std::cout << v << std::endl;
@@ -256,6 +249,43 @@ int main(int argc, char *argv[]) {
   for (auto r : stat_rt) {
     std::cout << r.count() << std::endl;
   }
+}
+
+int main(int argc, char *argv[]) {
+  if (argc != 5) {
+    printUse();
+    return 1;
+  }
+  Aux::Random::setSeed(0, true);
+
+  if (!parseInput(std::vector<std::string>(argv, argv + argc))) {
+    return 1;
+  }
+
+  std::cout << "Start comparison for the dynamic " << argv[4]
+            << "-matching: " << operation << " " << batch_size << " edge"
+            << pluralS(batch_size) << " " << fromOrInto(operation)
+            << " the graph located at " << argv[1] << " with "
+            << G.numberOfNodes() << " nodes and " << G.numberOfEdges()
+            << " edges." << std::endl;
+  std::cout << std::endl;
+
+  for (int i = 0; i < num_runs; i++) {
+    Aux::Random::setSeed(i, true);
+    (operation == "insert") ? edges<WeightedEdge>.clear() : edges<Edge>.clear();
+    num_b.has_value() ? runDynamicBSuitor(G, num_b.value())
+                      : runDynamicBSuitor(G, vec_b.value());
+  }
+  num_b.has_value() ? runStaticBSuitor(G, num_b.value())
+                    : runStaticBSuitor(G, vec_b.value());
+
+  // calculateMean();
+  // calculateVariance();
+
+  printResults();
+
+  for (auto w : dyn_ws)
+    assert(std::abs(w - stat_w) < FLOAT_EPSILON);
 
   return 0;
 }
