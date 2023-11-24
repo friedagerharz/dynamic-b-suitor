@@ -1,6 +1,5 @@
 #include <chrono>
 #include <cstring>
-#include <filesystem>
 #include <networkit/Globals.hpp>
 #include <networkit/algebraic/AlgebraicGlobals.hpp>
 #include <networkit/auxiliary/Random.hpp>
