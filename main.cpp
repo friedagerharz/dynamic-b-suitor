@@ -119,6 +119,7 @@ bool parseInput(std::vector<std::string> args) {
   G.removeMultiEdges();
   if (G.isDirected()) {
     G = GraphTools::toUndirected(G);
+    std::cout << "Transformed directed to undirected graph\n";
   }
 
   n = G.numberOfNodes();
@@ -242,6 +243,9 @@ template <typename BType> void runStaticBSuitor(Graph &G, BType &b) {
 }
 
 void printResults() {
+  auto sum_deg = G.parallelSumForNodes([&](node u) { return G.degree(u); });
+  std::cout << "Average degree: \n";
+  std::cout << sum_deg / G.numberOfNodes() << std::endl;
   std::cout << "(Dynamic) affected nodes per run:\n";
   for (auto v : dyn_num_affected) {
     std::cout << v << std::endl;
