@@ -5,9 +5,9 @@
 #include <networkit/auxiliary/Random.hpp>
 #include <networkit/graph/Graph.hpp>
 #include <networkit/graph/GraphTools.hpp>
-#include <networkit/io/GraphToolBinaryReader.hpp>
 #include <networkit/io/METISGraphReader.hpp>
 #include <networkit/io/MatrixMarketGraphReader.hpp>
+#include <networkit/io/NetworkitBinaryReader.hpp>
 #include <networkit/matching/BSuitorMatcher.hpp>
 #include <networkit/matching/DynamicBSuitorMatcher.hpp>
 
@@ -106,24 +106,21 @@ bool parseInput(std::vector<std::string> args) {
     return false;
   } else if (format == "mtx") {
     G = MatrixMarketGraphReader{}.read(file);
-    G.removeSelfLoops();
-    G.removeMultiEdges();
-  } else if (format == "gt") {
-    G = GraphToolBinaryReader{}.read(
-        file); // doesn't work with weighted graphs (GraphToolBinaryReader line
-               // 23 weighted=false) therefore adding random weights below
-    G.removeSelfLoops();
-    G.removeMultiEdges();
-    GraphTools::randomizeWeights(G);
+  } else if (format == "nkb") {
+    G = NetworkitBinaryReader{}.read(file);
   } else if (format == "graph") {
     G = METISGraphReader{}.read(file);
-    G.removeSelfLoops();
-    G.removeMultiEdges();
   } else {
     printUse();
     std::cerr << "invalid graph format" << std::endl;
     return false;
   }
+  G.removeSelfLoops();
+  G.removeMultiEdges();
+  if (G.isDirected()) {
+    G = GraphTools::toUndirected(G);
+  }
+
   n = G.numberOfNodes();
 
   if (args.at(2) != "insert" && args.at(2) != "remove") {
@@ -153,7 +150,6 @@ dur edgeInsertion(Graph &G, DynamicBSuitorMatcher &dbsm) {
   for (auto &edge : edges<WeightedEdge>) {
     G.addEdge(edge.u, edge.v, edge.weight);
   }
-
   const auto t1 = high_resolution_clock::now();
   dbsm.addEdges(edges<WeightedEdge>);
   dbsm.buildBMatching();
@@ -163,8 +159,9 @@ dur edgeInsertion(Graph &G, DynamicBSuitorMatcher &dbsm) {
 
 template <typename EdgeType>
 dur edgeRemoval(Graph &G, DynamicBSuitorMatcher &dbsm) {
-  for (auto e : edges<Edge>)
-    G.removeEdge(e.u, e.v);
+  for (auto &edge : edges<Edge>) {
+    G.removeEdge(edge.u, edge.v);
+  }
   const auto t1 = high_resolution_clock::now();
   dbsm.removeEdges(edges<Edge>);
   dbsm.buildBMatching();
@@ -184,9 +181,24 @@ template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
       G.removeEdge(u, v);
     }
   } else {
-    // Select batch_size edges to be added to the graph. Put them into edges for
-    // later removal. This will make sure that the graph is valid and th after
-    // removal.
+    // Select batch_size edges with uniformly distributed random weights i a
+    // range between the smallest and largest weight of all edges in G to be
+    // added to the graph. Put them into edges for later removal. This will make
+    // sure that the graph is valid and th after removal.
+    auto min_w = std::numeric_limits<edgeweight>::max();
+    auto max_w = std::numeric_limits<edgeweight>::min();
+
+    G.parallelForEdges([&](node, node, const edgeweight ew) {
+#pragma omp critical
+      {
+        if (ew > max_w) {
+          max_w = ew;
+        }
+        if (ew < min_w) {
+          min_w = ew;
+        }
+      }
+    });
 
     for (auto j = 0; j < batch_size; j++) {
       node u, v;
@@ -194,7 +206,7 @@ template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
         u = GraphTools::randomNode(G);
         v = GraphTools::randomNode(G);
       } while (u == v || G.hasEdge(u, v));
-      edgeweight w = 1.0;
+      edgeweight w = Aux::Random::real(min_w, max_w);
       edges<Edge>.emplace_back(u, v);
       G.addEdge(u, v, w);
     }
@@ -283,8 +295,9 @@ int main(int argc, char *argv[]) {
 
   printResults();
 
-  for (auto w : dyn_ws)
+  for (auto w : dyn_ws) {
     assert(std::abs(w - stat_w) < FLOAT_EPSILON);
+  }
 
   return 0;
 }
