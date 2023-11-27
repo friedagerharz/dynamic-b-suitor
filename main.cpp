@@ -117,10 +117,7 @@ bool parseInput(std::vector<std::string> args) {
   }
   G.removeSelfLoops();
   G.removeMultiEdges();
-  if (G.isDirected()) {
-    G = GraphTools::toUndirected(G);
-    std::cout << "Transformed directed to undirected graph\n";
-  }
+  assert(!G.isDirected());
 
   n = G.numberOfNodes();
 
