@@ -119,6 +119,11 @@ bool parseInput(std::vector<std::string> args) {
   G.removeMultiEdges();
   assert(!G.isDirected());
 
+  if (!G.isWeighted()) {
+    G = GraphTools::toWeighted(G);
+    G.forEdges([&](node u, node v) { G.setWeight(u, v, Aux::Random::real()); });
+  }
+
   n = G.numberOfNodes();
 
   if (args.at(2) != "insert" && args.at(2) != "remove") {
