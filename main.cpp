@@ -105,7 +105,10 @@ bool parseInput(std::vector<std::string> args) {
     std::cerr << "first argument path must a path to a graph file" << std::endl;
     return false;
   } else if (format == "mtx") {
-    G = MatrixMarketGraphReader{}.read(file);
+    G = MatrixMarketGraphReader{}.read(
+        file); // (015c2ee30a) MatrixMarketGraphReader treats all directed
+               // graphs as undirected and chooses one edgeweight in case of
+               // weighted multi edges for the experiments
   } else if (format == "nkb") {
     G = NetworkitBinaryReader{}.read(file);
   } else if (format == "graph") {
