@@ -158,8 +158,8 @@ dur edgeInsertion(Graph &G, DynamicBSuitorMatcher &dbsm) {
   }
   const auto t1 = high_resolution_clock::now();
   dbsm.addEdges(edges<WeightedEdge>);
-  dbsm.buildBMatching();
   const auto t2 = high_resolution_clock::now();
+  dbsm.buildBMatching();
   return t2 - t1;
 }
 
@@ -170,8 +170,8 @@ dur edgeRemoval(Graph &G, DynamicBSuitorMatcher &dbsm) {
   }
   const auto t1 = high_resolution_clock::now();
   dbsm.removeEdges(edges<Edge>);
-  dbsm.buildBMatching();
   const auto t2 = high_resolution_clock::now();
+  dbsm.buildBMatching();
   return t2 - t1;
 }
 
@@ -237,8 +237,8 @@ template <typename BType> void runStaticBSuitor(Graph &G, BType &b) {
 
   const auto t3 = high_resolution_clock::now();
   bsm.run();
-  bsm.buildBMatching();
   const auto t4 = high_resolution_clock::now();
+  bsm.buildBMatching();
   dur stat_t = t4 - t3;
 
   const auto sm = bsm.getBMatching();
