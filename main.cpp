@@ -159,7 +159,7 @@ dur edgeInsertion(Graph &G, DynamicBSuitorMatcher &dbsm) {
   const auto t1 = high_resolution_clock::now();
   dbsm.addEdges(edges<WeightedEdge>);
   const auto t2 = high_resolution_clock::now();
-  // dbsm.buildBMatching();
+  dbsm.buildBMatching();
   return t2 - t1;
 }
 
@@ -171,7 +171,7 @@ dur edgeRemoval(Graph &G, DynamicBSuitorMatcher &dbsm) {
   const auto t1 = high_resolution_clock::now();
   dbsm.removeEdges(edges<Edge>);
   const auto t2 = high_resolution_clock::now();
-  // dbsm.buildBMatching();
+  dbsm.buildBMatching();
   return t2 - t1;
 }
 
@@ -237,9 +237,9 @@ void runDynamicBSuitor(Graph &G, BType &b,
                                       : edgeRemoval<Edge>(G, dbsm);
   dyn_num_affected.emplace_back(dbsm.getNumberOfAffected());
 
-  // const auto dm = dbsm.getBMatching();
+  const auto dm = dbsm.getBMatching();
 
-  // dyn_ws.emplace_back(dm.weight(G));
+  dyn_ws.emplace_back(dm.weight(G));
   dyn_rt.emplace_back(dyn_t);
 }
 
@@ -249,11 +249,11 @@ template <typename BType> void runStaticBSuitor(Graph &G, BType &b) {
   const auto t3 = high_resolution_clock::now();
   bsm.run();
   const auto t4 = high_resolution_clock::now();
-  // bsm.buildBMatching();
+  bsm.buildBMatching();
   dur stat_t = t4 - t3;
 
-  // const auto sm = bsm.getBMatching();
-  // stat_w = sm.weight(G);
+  const auto sm = bsm.getBMatching();
+  stat_w = sm.weight(G);
 
   stat_rt.emplace_back(stat_t);
 }
@@ -316,9 +316,9 @@ int main(int argc, char *argv[]) {
 
   printResults();
 
-  // for (auto w : dyn_ws) {
-  //   assert(std::abs(w - stat_w) < FLOAT_EPSILON);
-  // }
+  for (auto w : dyn_ws) {
+    assert(std::abs(w - stat_w) < FLOAT_EPSILON);
+  }
 
   return 0;
 }
