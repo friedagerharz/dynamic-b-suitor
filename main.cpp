@@ -175,7 +175,9 @@ dur edgeRemoval(Graph &G, DynamicBSuitorMatcher &dbsm) {
   return t2 - t1;
 }
 
-template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
+template <typename BType>
+void runDynamicBSuitor(Graph &G, BType &b,
+                       std::default_random_engine &random_generator) {
   if (operation == "insert") {
     // Select batch_size edges of the graph, remove them but put them into edges
     // for later insertion. This will make sure that the graph is valid and th
@@ -187,12 +189,13 @@ template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
       G.removeEdge(u, v);
     }
   } else {
-    // Select batch_size edges with uniformly distributed random weights i a
+    // Select batch_size edges with normal distributed random weights i a
     // range between the smallest and largest weight of all edges in G to be
     // added to the graph. Put them into edges for later removal. This will make
     // sure that the graph is valid and th after removal.
     auto min_w = std::numeric_limits<edgeweight>::max();
     auto max_w = std::numeric_limits<edgeweight>::min();
+    edgeweight sum_w = 0;
 
     G.parallelForEdges([&](node, node, const edgeweight ew) {
 #pragma omp critical
@@ -203,8 +206,14 @@ template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
         if (ew < min_w) {
           min_w = ew;
         }
+        sum_w += ew;
       }
     });
+    // needs to be overflow safe?!
+    edgeweight avg_w = sum_w / G.numberOfEdges();
+    double stddev = std::abs(avg_w - min_w) < std::abs(max_w - avg_w)
+                        ? std::abs(avg_w - min_w)
+                        : std::abs(max_w - avg_w);
 
     for (auto j = 0; j < batch_size; j++) {
       node u, v;
@@ -212,7 +221,9 @@ template <typename BType> void runDynamicBSuitor(Graph &G, BType &b) {
         u = GraphTools::randomNode(G);
         v = GraphTools::randomNode(G);
       } while (u == v || G.hasEdge(u, v));
-      edgeweight w = Aux::Random::real(min_w, max_w);
+      // edgeweight w = Aux::Random::real(min_w, max_w);
+      std::normal_distribution<edgeweight> dist(avg_w, stddev);
+      edgeweight w = dist(random_generator);
       edges<Edge>.emplace_back(u, v);
       G.addEdge(u, v, w);
     }
@@ -292,9 +303,10 @@ int main(int argc, char *argv[]) {
 
   for (int i = 0; i < num_runs; i++) {
     Aux::Random::setSeed(i, true);
+    std::default_random_engine random_generator(i);
     (operation == "insert") ? edges<WeightedEdge>.clear() : edges<Edge>.clear();
-    num_b.has_value() ? runDynamicBSuitor(G, num_b.value())
-                      : runDynamicBSuitor(G, vec_b.value());
+    num_b.has_value() ? runDynamicBSuitor(G, num_b.value(), random_generator)
+                      : runDynamicBSuitor(G, vec_b.value(), random_generator);
   }
   num_b.has_value() ? runStaticBSuitor(G, num_b.value())
                     : runStaticBSuitor(G, vec_b.value());
